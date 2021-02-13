@@ -45,13 +45,17 @@ You should see messages in the Console app that reflect this process
 
 ### The issue
 
-The issue is that the call to `FProvider.reportNewIncomingCallWithUUID` inside the `TPlatformVOIP.ReportIncomingCall` method **should** result in the CallKit UI being displayed, as well as the `TPlatformVOIP.IncomingCallCompletionHandler` method being called, neither of which occurs
-As a guide, the result should look something like this:
+The issue is that the call to `FProvider.reportNewIncomingCallWithUUID` inside the `TPlatformVOIP.ReportIncomingCall` method **should** result in the CallKit UI being displayed, as well as the `TPlatformVOIP.IncomingCallCompletionHandler` method being called, neither of which occurs. As a guide, the result should look something like this:
 
 ![example](https://user-images.githubusercontent.com/26162804/32139717-cc2309a6-bc1f-11e7-91f4-6bbb158cbeb4.png)
 
 Which is from [this article](https://websitebeaver.com/callkit-swift-tutorial-super-easy)
 
+Please use [this issue](https://github.com/DelphiWorlds/VOIPDemo/issues/1) for comments/discussion, and discussion can also occur in the #general channel in the Delphi Worlds Slack workspace
+
+This code is destined for the [Kastri](https://github.com/DelphiWorlds/Kastri) library, so anyone who helps out will be able to benefit from it
+
+Thanks in advance for any help!
 
 
 
