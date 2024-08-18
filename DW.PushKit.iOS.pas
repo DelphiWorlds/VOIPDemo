@@ -6,12 +6,10 @@ unit DW.PushKit.iOS;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 interface
 
@@ -45,12 +43,13 @@ type
   private
     FDelegate: TPushRegistryDelegate;
   protected
-    function GetStoredToken: string; override;
     procedure MessageReceived(const APayload: PKPushPayload);
     procedure TokenReceived(const AToken: string; const AIsNew: Boolean);
+  public
+    function GetStoredToken: string; override;
     procedure Start; override;
   public
-    constructor Create(const APushKit: TPushKit); override;
+    constructor Create;
     destructor Destroy; override;
   end;
 
@@ -143,7 +142,7 @@ end;
 
 { TPlatformPushKit }
 
-constructor TPlatformPushKit.Create(const APushKit: TPushKit);
+constructor TPlatformPushKit.Create;
 begin
   inherited;
   FDelegate := TPushRegistryDelegate.Create(Self);

@@ -6,12 +6,10 @@ unit DW.iOSapi.Foundation;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 interface
 
@@ -33,11 +31,24 @@ const
   NSPersonNameComponentsFormatterStyleLong = 3;
   NSPersonNameComponentsFormatterStyleAbbreviated = 4;
   NSPersonNameComponentsFormatterPhonetic = 2;
+  NSStringEnumerationByLines = 0;
+  NSStringEnumerationByParagraphs = 1;
+  NSStringEnumerationByComposedCharacterSequences = 2;
+  NSStringEnumerationByWords = 3;
+  NSStringEnumerationBySentences = 4;
+  NSStringEnumerationByCaretPositions = 5;
+  NSStringEnumerationByDeletionClusters = 6;
 
 type
+  NSDateInterval = interface;
+  NSItemProvider = interface;
   NSLocale = interface;
+  NSMeasurement = interface;
+  NSOrderedCollectionChange = interface;
+  NSOrderedCollectionDifference = interface;
   NSPersonNameComponents = interface;
   NSProgress = interface;
+  NSUnit = interface;
   NSUserActivity = interface;
 
   NSErrorDomain = NSString;
@@ -51,16 +62,133 @@ type
   NSProgressFileOperationKind = NSString;
   NSItemProviderRepresentationVisibility = NSInteger;
   NSItemProviderFileOptions = NSInteger;
+  NSCollectionChangeType = NSInteger;
+  NSRangePointer = ^NSRange;
+  NSExceptionName = NSString;
+  NSRunLoopMode = NSString;
+  NSComparisonResult = NSInteger;
+  NSStringEnumerationOptions = NSInteger;
+  NSAttributedStringKey = NSString;
+  NSAttributedStringFormattingContextKey = NSString;
+  NSAttributedStringEnumerationOptions = NSInteger;
+  NSQualityOfService = NSInteger;
+  NSFileProtectionType = NSString;
 
+  NSItemProviderCompletionHandler = procedure(item: Pointer; error: NSError) of object;
+  NSItemProviderLoadHandler = procedure(completionHandler: NSItemProviderCompletionHandler; expectedValueClass: Pointer; options: NSDictionary) of object;
+  NSItemProviderErrorCode = NSInteger;
   NSProgressUnpublishingHandler = procedure of object;
   NSProgressPublishingHandler = function(progress: NSProgress): NSProgressUnpublishingHandler of object;
 
+  NSOperatingSystemVersion = record
+    majorVersion: NSInteger;
+    minorVersion: NSInteger;
+    patchVersion: NSInteger;
+  end;
+
+  TNSItemProviderBlockMethod1 = procedure of object;
+  TNSItemProviderBlockMethod2 = procedure(completionHandler: TNSItemProviderBlockMethod1) of object;
+  TNSItemProviderBlockMethod3 = procedure(data: NSData; error: NSError) of object;
+  TNSItemProviderBlockMethod4 = procedure(url: NSURL; error: NSError) of object;
+  TNSItemProviderBlockMethod5 = procedure(url: NSURL; isInPlace: Boolean; error: NSError) of object;
+  TNSItemProviderBlockMethod6 = procedure(&object: Pointer; error: NSError) of object;
   TNSProgressBlockMethod1 = procedure of object;
   TNSProgressBlockMethod2 = procedure of object;
   TNSProgressBlockMethod3 = procedure of object;
   TNSProgressBlockMethod4 = procedure of object;
   TNSUserActivityBlockMethod1 = procedure(inputStream: NSInputStream; outputStream: NSOutputStream; error: NSError) of object;
   TNSUserActivityBlockMethod2 = procedure of object;
+  TNSOrderedCollectionDifferenceBlockMethod1 = procedure(param1: NSOrderedCollectionChange) of object;
+
+  NSOrderedCollectionChangeClass = interface(NSObjectClass)
+    ['{C976F40F-1B7E-4F47-A9FA-82F2632794A1}']
+    {class} function changeWithObject(anObject: Pointer; &type: NSCollectionChangeType; index: NSUInteger): NSOrderedCollectionChange; overload; cdecl;
+    {class} function changeWithObject(anObject: Pointer; &type: NSCollectionChangeType; index: NSUInteger; associatedIndex: NSUInteger): NSOrderedCollectionChange; overload; cdecl;
+  end;
+
+  NSOrderedCollectionChange = interface(NSObject)
+    ['{A602C161-CFFD-43C1-9C1E-595C2AF86EB0}']
+    function &object: Pointer; cdecl;
+    function associatedIndex: NSUInteger; cdecl;
+    function changeType: NSCollectionChangeType; cdecl;
+    function index: NSUInteger; cdecl;
+    function initWithObject(anObject: Pointer; &type: NSCollectionChangeType; index: NSUInteger): Pointer; overload; cdecl;
+    function initWithObject(anObject: Pointer; &type: NSCollectionChangeType; index: NSUInteger; associatedIndex: NSUInteger): Pointer; overload; cdecl;
+  end;
+  TNSOrderedCollectionChange = class(TOCGenericImport<NSOrderedCollectionChangeClass, NSOrderedCollectionChange>) end;
+
+  NSOrderedCollectionDifferenceClass = interface(NSObjectClass)
+    ['{C974E07C-048A-4D32-9CFA-8A2CADF6687E}']
+  end;
+
+  NSOrderedCollectionDifference = interface(NSObject)
+    ['{A94E9D8F-CD49-44B1-96F6-756CB61D47AA}']
+    function differenceByTransformingChangesWithBlock(block: TNSOrderedCollectionDifferenceBlockMethod1): NSOrderedCollectionDifference; cdecl;
+    function hasChanges: Boolean; cdecl;
+    function initWithChanges(changes: NSArray): Pointer; cdecl;
+    function initWithInsertIndexes(inserts: NSIndexSet; insertedObjects: NSArray; removeIndexes: NSIndexSet; removedObjects: NSArray; additionalChanges: NSArray): Pointer; overload; cdecl;
+    function initWithInsertIndexes(inserts: NSIndexSet; insertedObjects: NSArray; removeIndexes: NSIndexSet; removedObjects: NSArray): Pointer; overload; cdecl;
+    function insertions: NSArray; cdecl;
+    function inverseDifference: Pointer; cdecl;
+    function removals: NSArray; cdecl;
+  end;
+  TNSOrderedCollectionDifference = class(TOCGenericImport<NSOrderedCollectionDifferenceClass, NSOrderedCollectionDifference>) end;
+
+  NSDateIntervalClass = interface(NSObjectClass)
+    ['{B19E17B2-394D-45B8-AB71-E70138251973}']
+  end;
+
+  NSDateInterval = interface(NSObject)
+    ['{971BB9F8-1C61-4F2B-A1AE-C7D7D0D178A5}']
+    function compare(dateInterval: NSDateInterval): NSComparisonResult; cdecl;
+    function containsDate(date: NSDate): Boolean; cdecl;
+    function duration: NSTimeInterval; cdecl;
+    function endDate: NSDate; cdecl;
+    function initWithCoder(coder: NSCoder): Pointer; cdecl;
+    function initWithStartDate(startDate: NSDate; endDate: NSDate): Pointer; overload; cdecl;
+    function initWithStartDate(startDate: NSDate; duration: NSTimeInterval): Pointer; overload; cdecl;
+    function intersectionWithDateInterval(dateInterval: NSDateInterval): NSDateInterval; cdecl;
+    function intersectsDateInterval(dateInterval: NSDateInterval): Boolean; cdecl;
+    function isEqualToDateInterval(dateInterval: NSDateInterval): Boolean; cdecl;
+    function startDate: NSDate; cdecl;
+  end;
+  TNSDateInterval = class(TOCGenericImport<NSDateIntervalClass, NSDateInterval>) end;
+
+  NSItemProviderClass = interface(NSObjectClass)
+    ['{574DFF14-C35E-40E1-B7EA-C118E2FD3C53}']
+  end;
+
+  NSItemProvider = interface(NSObject)
+    ['{028F7E61-2DF3-4CB8-9CE6-8D8412114B32}']
+    function canLoadObjectOfClass(aClass: Pointer): Boolean; cdecl;
+    function hasItemConformingToTypeIdentifier(typeIdentifier: NSString): Boolean; cdecl;
+    function hasRepresentationConformingToTypeIdentifier(typeIdentifier: NSString; fileOptions: NSItemProviderFileOptions): Boolean; cdecl;
+    function initWithContentsOfURL(fileURL: NSURL): Pointer; cdecl;
+    function initWithItem(item: Pointer; typeIdentifier: NSString): Pointer; cdecl;
+    function initWithObject(&object: Pointer): Pointer; cdecl;
+    function loadDataRepresentationForTypeIdentifier(typeIdentifier: NSString; completionHandler: TNSItemProviderBlockMethod3): NSProgress; cdecl;
+    function loadFileRepresentationForTypeIdentifier(typeIdentifier: NSString; completionHandler: TNSItemProviderBlockMethod4): NSProgress; cdecl;
+    function loadInPlaceFileRepresentationForTypeIdentifier(typeIdentifier: NSString;
+      completionHandler: TNSItemProviderBlockMethod5): NSProgress; cdecl;
+    procedure loadItemForTypeIdentifier(typeIdentifier: NSString; options: NSDictionary; completionHandler: NSItemProviderCompletionHandler); cdecl;
+    function loadObjectOfClass(aClass: Pointer; completionHandler: TNSItemProviderBlockMethod6): NSProgress; cdecl;
+    procedure loadPreviewImageWithOptions(options: NSDictionary; completionHandler: NSItemProviderCompletionHandler); cdecl;
+    function previewImageHandler: NSItemProviderLoadHandler; cdecl;
+    procedure registerDataRepresentationForTypeIdentifier(typeIdentifier: NSString; visibility: NSItemProviderRepresentationVisibility;
+      loadHandler: TNSItemProviderBlockMethod2); cdecl;
+    function registeredTypeIdentifiers: NSArray; cdecl;
+    function registeredTypeIdentifiersWithFileOptions(fileOptions: NSItemProviderFileOptions): NSArray; cdecl;
+    procedure registerFileRepresentationForTypeIdentifier(typeIdentifier: NSString; fileOptions: NSItemProviderFileOptions;
+      visibility: NSItemProviderRepresentationVisibility; loadHandler: TNSItemProviderBlockMethod2); cdecl;
+    procedure registerItemForTypeIdentifier(typeIdentifier: NSString; loadHandler: NSItemProviderLoadHandler); cdecl;
+    procedure registerObject(&object: Pointer; visibility: NSItemProviderRepresentationVisibility); cdecl;
+    procedure registerObjectOfClass(aClass: Pointer; visibility: NSItemProviderRepresentationVisibility;
+      loadHandler: TNSItemProviderBlockMethod2); cdecl;
+    procedure setPreviewImageHandler(previewImageHandler: NSItemProviderLoadHandler); cdecl;
+    procedure setSuggestedName(suggestedName: NSString); cdecl;
+    function suggestedName: NSString; cdecl;
+  end;
+  TNSItemProvider = class(TOCGenericImport<NSItemProviderClass, NSItemProvider>) end;
 
   NSLocaleClass = interface(NSObjectClass)
     ['{4597A459-6F9B-49F4-8C80-3F8ED8FDB9D1}']
@@ -183,11 +311,13 @@ type
     procedure setPersistentIdentifier(persistentIdentifier: NSUserActivityPersistentIdentifier); cdecl;
     procedure setReferrerURL(referrerURL: NSURL); cdecl;
     procedure setRequiredUserInfoKeys(requiredUserInfoKeys: NSSet); cdecl;
+    procedure setSuggestedInvocationPhrase(phrase: NSString); cdecl;
     procedure setSupportsContinuationStreams(supportsContinuationStreams: Boolean); cdecl;
     procedure setTargetContentIdentifier(targetContentIdentifier: NSString); cdecl;
     procedure setTitle(title: NSString); cdecl;
     procedure setUserInfo(userInfo: NSDictionary); cdecl;
     procedure setWebpageURL(webpageURL: NSURL); cdecl;
+    function suggestedInvocationPhrase: NSString; cdecl;
     function supportsContinuationStreams: Boolean; cdecl;
     function targetContentIdentifier: NSString; cdecl;
     function title: NSString; cdecl;
@@ -272,6 +402,34 @@ type
     function progress: NSProgress; cdecl;
   end;
 
+  NSUnitClass = interface(NSObjectClass)
+    ['{E58B92C1-F0D4-496B-8C43-397E478C10AA}']
+    {class} function new: Pointer; cdecl;
+  end;
+
+  NSUnit = interface(NSObject)
+    ['{4FAA83A3-6D6B-4BF9-BFD6-9EE2C0F02382}']
+    function initWithSymbol(symbol: NSString): Pointer; cdecl;
+    function symbol: NSString; cdecl;
+  end;
+  TNSUnit = class(TOCGenericImport<NSUnitClass, NSUnit>) end;
+
+  NSMeasurementClass = interface(NSObjectClass)
+    ['{5992431E-64D1-4813-B918-D656927DC518}']
+  end;
+
+  NSMeasurement = interface(NSObject)
+    ['{AA2F9B58-7C87-4632-9A4B-8865D26F8B83}']
+    [MethodName('unit')]
+    function &unit: Pointer; cdecl;
+    function canBeConvertedToUnit(&unit: NSUnit): Boolean; cdecl;
+    function doubleValue: Double; cdecl;
+    function initWithDoubleValue(doubleValue: Double; &unit: Pointer): Pointer; cdecl;
+    function measurementByAddingMeasurement(measurement: NSMeasurement): NSMeasurement; cdecl;
+    function measurementByConvertingToUnit(&unit: NSUnit): NSMeasurement; cdecl;
+    function measurementBySubtractingMeasurement(measurement: NSMeasurement): NSMeasurement; cdecl;
+  end;
+  TNSMeasurement = class(TOCGenericImport<NSMeasurementClass, NSMeasurement>) end;
 
 function NSUserActivityTypeBrowsingWeb: NSString;
 

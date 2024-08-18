@@ -6,31 +6,47 @@ unit DW.Macapi.Helpers;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 interface
 
 uses
   // RTL
-  System.Classes,
+  System.Classes, System.SysUtils,
   // macOS
   {$IF Defined(MACOS)}
-  Macapi.CoreFoundation,
-  {$ENDIF}
-  {$IF Defined(MACDEV)}
-  Macapi.Foundation, Macapi.AppKit;
+  Macapi.CoreFoundation, Macapi.ObjectiveC,
   {$ENDIF}
   // iOS
   {$IF Defined(IOS)}
   iOSapi.Foundation;
+  {$ELSEIF Defined(MACOS)}
+  Macapi.Foundation, Macapi.AppKit,
+  DW.Macapi.Foundation;
   {$ENDIF}
 
 type
+  IKeyValueObserver = interface(IObjectiveC)
+    ['{F2E1218B-ACE3-4FCA-9083-7A488F26E14A}']
+    procedure observeValueForKeyPath(keyPath: NSString; ofObject: Pointer; change: NSDictionary; context: Pointer); cdecl;
+  end;
+
+  TKeyValueChangeProc = reference to procedure(const KeyPath: string; const Change: NSDictionary);
+
+  TKeyValueObserver = class(TOCLocal, IKeyValueObserver)
+  private
+    FKeyValueChangeHandler: TKeyValueChangeProc;
+  public
+    { IKeyValueObserver }
+    procedure observeValueForKeyPath(keyPath: NSString; ofObject: Pointer; change: NSDictionary; context: Pointer); cdecl;
+  public
+    constructor Create(const AKeyValueChangeHandler: TKeyValueChangeProc);
+    procedure Observe(const AObject: NSObject; const APath: string; const AOptions: NSKeyValueObservingOptions);
+  end;
+
   TNSDictionaryHelper = record
   private
     FDictionary: NSDictionary;
@@ -55,6 +71,12 @@ type
   TNSArrayHelper = record
   public
     class function FromNSObjects(const AArray: array of NSObject): NSArray; static;
+    class function FromNSStrings(const AArray: array of NSString): NSArray; static;
+  end;
+
+  TNSDataHelper = record
+  public
+    class function ToBytes(const AData: NSData): TBytes; static;
   end;
 
   TMacHelperEx = record
@@ -64,7 +86,7 @@ type
     class function GetBundleValue(const AKey: string): string; static;
     class function GetBundleValueNS(const AKey: string): NSString; static;
     class function MainBundle: NSBundle; static;
-    {$IF Defined(MACDEV)}
+    {$IF not Defined(IOS)}
     class function SharedApplication: NSApplication; static;
     {$ENDIF}
     class function StandardUserDefaults: NSUserDefaults; static;
@@ -101,19 +123,39 @@ function StringsToNSArray(const AStrings: TStrings; const ADequote: Boolean = Fa
 /// <summary>
 ///   Converts a string directly into an NSString reference (ID)
 /// </summary>
-function StrToObjectID(const AStr: string): Pointer;
+function StrToObjectID(const AStr: string): Pointer; deprecated 'Use StringToID from Macapi.Helpers';
 /// <summary>
 ///   Converts a string into an CFStringRef
 /// </summary>
 function StrToCFStringRef(const AStr: string): CFStringRef;
+function NSErrorToStr(const AError: NSError): string;
 
 implementation
 
 uses
   // RTL
-  System.DateUtils, System.SysUtils,
+  System.DateUtils,
   // macOS
-  Macapi.ObjectiveC, Macapi.Helpers;
+  Macapi.Helpers;
+
+{ TKeyValueObserver }
+
+constructor TKeyValueObserver.Create(const AKeyValueChangeHandler: TKeyValueChangeProc);
+begin
+  inherited Create;
+  FKeyValueChangeHandler := AKeyValueChangeHandler;
+end;
+
+procedure TKeyValueObserver.Observe(const AObject: NSObject; const APath: string; const AOptions: NSKeyValueObservingOptions);
+begin
+  AObject.addObserver(TNSObject.Wrap(GetObjectID), StrToNSStr(APath), AOptions, nil);
+end;
+
+procedure TKeyValueObserver.observeValueForKeyPath(keyPath: NSString; ofObject: Pointer; change: NSDictionary; context: Pointer);
+begin
+  if Assigned(FKeyValueChangeHandler) then
+    FKeyValueChangeHandler(NSStrToStr(keyPath), change);
+end;
 
 { TNSDictionaryHelper }
 
@@ -262,6 +304,12 @@ begin
   Result := CFStringCreateWithCharacters(kCFAllocatorDefault, PChar(AStr), Length(AStr));
 end;
 
+function NSErrorToStr(const AError: NSError): string;
+begin
+  Result := Format('%s (%d): %s (%s)', [NSStrToStr(AError.domain), AError.code, NSStrToStr(AError.localizedDescription),
+    NSStrToStr(AError.localizedFailureReason)]);
+end;
+
 function GetLocalDateTime(const ADateTime: TDateTime): TDateTime;
 begin
   Result := IncSecond(ADateTime, TNSTimeZone.Wrap(TNSTimeZone.OCClass.localTimeZone).secondsFromGMT);
@@ -271,13 +319,24 @@ end;
 
 class function TNSArrayHelper.FromNSObjects(const AArray: array of NSObject): NSArray;
 var
-  LArray: array of Pointer;
   I: Integer;
+  LArray: NSMutableArray;
 begin
-  SetLength(LArray, Length(AArray));
+  LArray := TNSMutableArray.Create;
   for I := 0 to Length(AArray) - 1 do
-    LArray[I] := NSObjectToID(AArray[I]);
-  Result := TNSArray.Wrap(TNSArray.OCClass.arrayWithObjects(@LArray[0], Length(LArray)));
+    LArray.addObject(NSObjectToID(AArray[I]));
+  Result := LArray;
+end;
+
+class function TNSArrayHelper.FromNSStrings(const AArray: array of NSString): NSArray;
+var
+  I: Integer;
+  LArray: NSMutableArray;
+begin
+  LArray := TNSMutableArray.Create;
+  for I := 0 to Length(AArray) - 1 do
+    LArray.addObject(NSObjectToID(AArray[I]));
+  Result := LArray;
 end;
 
 { TMacHelperEx }
@@ -297,7 +356,7 @@ var
   LValueObject: Pointer;
 begin
   Result := nil;
-  LValueObject := MainBundle.infoDictionary.objectForKey(StrToObjectID(AKey));
+  LValueObject := MainBundle.infoDictionary.objectForKey(StringToID(AKey));
   if LValueObject <> nil then
     Result := TNSString.Wrap(LValueObject);
 end;
@@ -307,7 +366,7 @@ begin
   Result := TNSBundle.Wrap(TNSBundle.OCClass.mainBundle);
 end;
 
-{$IF Defined(MACDEV)}
+{$IF not Defined(IOS)}
 class function TMacHelperEx.SharedApplication: NSApplication;
 begin
   Result := TNSApplication.Wrap(TNSApplication.OCClass.sharedApplication);
@@ -317,6 +376,14 @@ end;
 class function TMacHelperEx.StandardUserDefaults: NSUserDefaults;
 begin
   Result := TNSUserDefaults.Wrap(TNSUserDefaults.OCClass.standardUserDefaults);
+end;
+
+{ TNSDataHelper }
+
+class function TNSDataHelper.ToBytes(const AData: NSData): TBytes;
+begin
+  SetLength(Result, AData.length);
+  Move(AData.bytes^, Result[0], AData.length);
 end;
 
 end.

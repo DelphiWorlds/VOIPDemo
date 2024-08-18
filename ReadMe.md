@@ -2,7 +2,7 @@
 
 This is a work in progress for VOIP support (initially iOS) for Delphi
 
-This repo has been created so as to seek help with at least one outstanding issue, so is only temporary and may be removed at any time
+This repo has been created so as to seek help with issues, so is only temporary and may be removed at any time
 
 All required files have been included, so please indicate if there any missing
 
@@ -16,8 +16,6 @@ Log in to the Apple Developer site and:
 
 In the KeyChain Access app on your Mac, right-click the VoIP services certificate, click Export and save the exported certificate in .p12 format (the default) somewhere on the Mac
 
-Download the Pusher app (a macOS app used for testing push notifications) from [here](https://github.com/noodlewerk/NWPusher/releases/tag/0.7.5)
-
 In the Delphi SDK Manager, add the CallKit and PushKit frameworks to the iOS SDK. [This link](https://delphiworlds.com/2013/10/adding-other-ios-frameworks-to-the-sdk-manager/) has a guide on how to add frameworks.
 
 In the Version Info of the Project Options for the project, select All Configurations - iOS Device 64-bit in the combobox, and modify the CFBundleIdentifier value to match the identifier of the App ID
@@ -26,30 +24,50 @@ In the Version Info of the Project Options for the project, select All Configura
 
 On the Mac:
 * Run the Console app (in /Applications/Utilities)
+* Select your iOS device on the left hand side
 * In the filter edit box in the top right of Console, type "VOIPDemo" (without the quotes) and hit enter
 * Click where it says "Any" just before VOIPDemo, and select Process from the dropdown
 * In the filter edit box, type "DEBUG:" (without the quotes) and hit enter
-* Select the target iOS device from the list on the left
+* Click the Start button
 
 On the Windows machine, compile/deploy/run the app
 
 On the Mac:
 * In the Console app, you should see a line that begins with DEBUG: Token. Select this line, and in the memo at the bottom, select and copy the token value
-* Run the Pusher app, click the combobox at the top, click the "Import PKCS # 12 file.." option and select the .p12 file that you saved earlier (see Setup section)
-* Paste the token value copied earlier into the token edit box
-* In the payload memo, paste in this text:  {"id": "someone@somedomain.com", "caller": "Me"}
-* Click the Push button
+* Open a browser and go to the [APNsPush site](https://apnspush.com/)
+* In Authentication Type, ensure that `Authenticate using certificates` is selected
+* Click `Choose file` and select the .p12 file that you saved earlier (see Setup section)
+* Enter the password that was used when exporting the .p12 file
+* Paste the token value copied earlier into the `Device Token` edit box
+* In the `apns-topic` edit box, enter your app's bundle identifier followed by `.voip`
+* In `apns-push-type`, select `voip`
+* In the payload edit box, paste in this text:
+  ```json
+  {
+     "aps" : {
+        "alert":"VoIP Call"
+     },
+     "email" : "davidn@radsoft.com.au",
+     "uuid" : "db1dff98-bfef-4ec0-8ac6-8187a3b0c645", 
+     "displayName" : "Dave"
+  }
+  ```
+* Click the Send button
 
 This should result in a push notification being sent to the device, which in turn ultimately calls the `TPlatformVOIP.ReportIncomingCall` method in the `DW.VOIP.iOS` unit.
 You should see messages in the Console app that reflect this process
 
-### The issue
+You can also "simulate" an incoming call by tapping the `Receive Call Test` button in the demo
 
-The issue is that the call to `FProvider.reportNewIncomingCallWithUUID` inside the `TPlatformVOIP.ReportIncomingCall` method **should** result in the CallKit UI being displayed, as well as the `TPlatformVOIP.IncomingCallCompletionHandler` method being called, neither of which occurs. As a guide, the result should look something like this:
+Tapping the `Make Call Test` button appears to do nothing, however please see the issues list below (regarding `StartOutgoingCall`) as to what is happening.
 
-![example](https://user-images.githubusercontent.com/26162804/32139717-cc2309a6-bc1f-11e7-91f4-6bbb158cbeb4.png)
+### The issues
 
-Which is from [this article](https://websitebeaver.com/callkit-swift-tutorial-super-easy)
+* When `FProvider.reportNewIncomingCallWithUUID` is called inside the `TPlatformVOIP.ReportIncomingCall` method, it successfully invokes the CallKit UI, however if the device is in the lock screen, there is only a "Slide to answer" option. Not sure whether this is as designed, however I suspect there should be a method of being able to decline without it. There also does not appear to be a way of having the CallKit UI "full screen", like in [this tutorial](https://websitebeaver.com/callkit-swift-tutorial-super-easy):
+  
+  ![example](https://user-images.githubusercontent.com/26162804/32139717-cc2309a6-bc1f-11e7-91f4-6bbb158cbeb4.png)
+
+* Calling `FController.requestTransaction` inside the `TPlatformVOIP.StartOutgoingCall` method appears to succeed, however no CallKit UI is shown. Swiping the app up then shows the UI - obviously the user should not need to do this. 
 
 Please use [this issue](https://github.com/DelphiWorlds/VOIPDemo/issues/1) for comments/discussion, and discussion can also occur in the #general channel in the Delphi Worlds Slack workspace
 

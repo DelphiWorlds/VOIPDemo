@@ -6,12 +6,10 @@ unit DW.iOSapi.Helpers;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 interface
 
@@ -21,15 +19,11 @@ uses
   // macOS
   Macapi.ObjectiveC,
   // iOS
-  iOSapi.Foundation, iOSapi.UIKit;
+  iOSapi.Foundation, iOSapi.CocoaTypes,
+  // DW
+  DW.iOSapi.UIKit;
 
 type
-  UIApplication = interface(iOSapi.UIKit.UIApplication)
-    ['{7228BEAE-1B3A-4EBC-A87C-03982C8EC742}']
-    function isRegisteredForRemoteNotifications: Boolean; cdecl;
-  end;
-  TUIApplication = class(TOCGenericImport<UIApplicationClass, UIApplication>) end;
-
   TiOSHelperEx = record
   public
     class procedure AddObserver(const AObserver: Pointer; const AMethod: MarshaledAString; const AName: NSString;
@@ -45,6 +39,7 @@ type
     class function NSDictionaryToString(const ADictionary: NSDictionary): string; static;
     class function SharedApplication: UIApplication; static;
     class function StandardUserDefaults: NSUserDefaults; static;
+    class function UIImageToJPEGData(const AImage: UIImage; const ACompressionQuality: CGFloat): NSData; static;
   end;
 
 implementation
@@ -100,15 +95,19 @@ begin
   Result := False;
   LBundle := TiOSHelper.MainBundle;
   LPointer := LBundle.infoDictionary.valueForKey(StrToNSStr('UIBackgroundModes')); // Do not localise
-  if LPointer = nil then
-    Exit; // <======
-  LModesArray := TNSArray.Wrap(LPointer);
-  for I := 0 to LModesArray.count - 1 do
+  if LPointer <> nil then
   begin
-    LModeString := NSStrToStr(TNSString.Wrap(LModesArray.objectAtIndex(I)));
-    if AMode.Equals(LModeString) then
-      Exit(True); // <======
-  end;
+    LModesArray := TNSArray.Wrap(LPointer);
+    for I := 0 to LModesArray.count - 1 do
+    begin
+      LModeString := NSStrToStr(TNSString.Wrap(LModesArray.objectAtIndex(I)));
+      if AMode.Equals(LModeString) then
+      begin
+        Result := True;
+        Break;
+      end;
+    end;
+   end;
 end;
 
 class function TiOSHelperEx.IsBackground: Boolean;
@@ -168,12 +167,17 @@ end;
 
 class function TiOSHelperEx.SharedApplication: UIApplication;
 begin
-  Result := TUIApplication.Wrap(TUIApplication.OCClass.sharedApplication);
+  Result := TUIApplication.OCClass.sharedApplication;
 end;
 
 class function TiOSHelperEx.StandardUserDefaults: NSUserDefaults;
 begin
   Result := TNSUserDefaults.Wrap(TNSUserDefaults.OCClass.standardUserDefaults);
+end;
+
+class function TiOSHelperEx.UIImageToJPEGData(const AImage: UIImage; const ACompressionQuality: CGFloat): NSData;
+begin
+  Result := TNSData.Wrap(UIImageJPEGRepresentation(NSObjectToID(AImage), ACompressionQuality));
 end;
 
 end.

@@ -5,7 +5,8 @@ interface
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Controls.Presentation, FMX.StdCtrls, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo,
-  DW.VOIP, FMX.Objects;
+  FMX.Objects,
+  DW.VOIP;
 
 type
   TForm1 = class(TForm)
@@ -14,11 +15,12 @@ type
     MakeCallTestButton: TButton;
     VOIPImage: TImage;
     procedure ReceiveCallTestButtonClick(Sender: TObject);
+    procedure MakeCallTestButtonClick(Sender: TObject);
   private
     FToken: string;
     FVOIP: TVOIP;
     procedure SetToken(const AToken: string);
-    procedure VOIPPushKitMessageReceivedHandler(Sender: TObject; const AJSON: string);
+    procedure VOIPCallStateChangeHandler(Sender: TObject; const ACallState: TVOIPCallState);
     procedure VOIPPushKitTokenReceivedHandler(Sender: TObject; const AToken: string; const AIsNew: Boolean);
   public
     constructor Create(AOwner: TComponent); override;
@@ -43,8 +45,8 @@ begin
   VOIPImage.Visible := False;
   FVOIP := TVOIP.Create;
   FVOIP.Icon := VOIPImage.Bitmap;
+  FVOIP.OnVOIPCallStateChange := VOIPCallStateChangeHandler;
   FVOIP.OnPushKitTokenReceived := VOIPPushKitTokenReceivedHandler;
-  FVOIP.OnPushKitMessageReceived := VOIPPushKitMessageReceivedHandler;
   SetToken(FVOIP.StoredToken);
   FVOIP.Start;
 end;
@@ -55,32 +57,26 @@ begin
   inherited;
 end;
 
+procedure TForm1.MakeCallTestButtonClick(Sender: TObject);
+var
+  LInfo: TVOIPCallInfo;
+begin
+  // This is to simulate initiating an outgoing call.
+  LInfo.DisplayName := 'Pete Za';
+  LInfo.Email := 'pete@za.com';
+  LInfo.UUID := '30DE53F0-8856-4059-881F-5BBDF5C92CCF';
+  FVOIP.StartOutgoingCall(LInfo);
+end;
+
 procedure TForm1.SetToken(const AToken: string);
 begin
   FToken := AToken;
   // Possibly take some action here, if AToken is not empty
 end;
 
-procedure TForm1.VOIPPushKitMessageReceivedHandler(Sender: TObject; const AJSON: string);
-var
-  LJSON: TJSONValue;
-  LId, LCaller: string;
+procedure TForm1.VOIPCallStateChangeHandler(Sender: TObject; const ACallState: TVOIPCallState);
 begin
-  // AJSON contains the json sent in the push notification from your server, so the structure is whatever you determine
-  // This example handler assumes the json is like this (for example):
-  // { "id": "30DE53F0-8856-4059-881F-5BBDF5C92CCF", "caller": "Marco Cantu" }
-  LJSON := TJSONObject.ParseJSONValue(AJSON);
-  if LJSON <> nil then
-  try
-    if LJSON.TryGetValue('id', LId) then
-    begin
-      LCaller := 'Unknown';
-      LJSON.TryGetValue('caller', LCaller);
-      FVOIP.ReportIncomingCall(LId, LCaller);
-    end;
-  finally
-    LJSON.Free;
-  end;
+  //
 end;
 
 procedure TForm1.VOIPPushKitTokenReceivedHandler(Sender: TObject; const AToken: string; const AIsNew: Boolean);
@@ -91,10 +87,14 @@ begin
 end;
 
 procedure TForm1.ReceiveCallTestButtonClick(Sender: TObject);
+var
+  LInfo: TVOIPCallInfo;
 begin
   // This is to simulate receiving an incoming call. Normally you might do this in VOIPPushKitMessageReceivedHandler
-  // The first parameter value is just a generated GUID
-  FVOIP.ReportIncomingCall('30DE53F0-8856-4059-881F-5BBDF5C92CCF', 'Pete Za');
+  LInfo.DisplayName := 'Pete Za';
+  LInfo.Email := 'pete@za.com';
+  LInfo.UUID := '30DE53F0-8856-4059-881F-5BBDF5C92CCF';
+  FVOIP.ReportIncomingCall(LInfo);
 end;
 
 end.

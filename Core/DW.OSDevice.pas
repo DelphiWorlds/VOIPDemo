@@ -6,14 +6,14 @@ unit DW.OSDevice;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
 
-{$I DW.GlobalDefines.inc}
-
 interface
+
+{$SCOPEDENUMS ON}
 
 uses
   // RTL
@@ -31,6 +31,8 @@ type
     function Culture: string;
   end;
 
+  TUIMode = (Appliance, Car, Desk, Normal, Television, VRHeadset, Undefined, Watch);
+
   /// <summary>
   ///   Operating System specific functions that operate below FMX
   /// </summary>
@@ -39,6 +41,14 @@ type
   /// </remarks>
   TOSDevice = record
   public
+    class function CanWriteSettings: Boolean; static;
+    /// <summary>
+    ///   Turns the torch on/off, if available
+    /// </summary>
+    class function EnableTorch(const AEnable: Boolean): Boolean; static;
+    /// <summary>
+    ///   Returns locale info
+    /// </summary>
     class function GetCurrentLocaleInfo: TLocaleInfo; static;
     /// <summary>
     ///   Returns the model of the device, if available
@@ -57,17 +67,37 @@ type
     /// </summary>
     class procedure GetEnvironmentVars(const AVars: TStrings); static;
     /// <summary>
+    ///   Returns the maker of the device
+    /// </summary>
+    class function GetManufacturer: string; static;
+    /// <summary>
     ///   Returns build for the application package, if any exists
     /// </summary>
     class function GetPackageBuild: string; static;
+    /// <summary>
+    ///   Returns the version that the app should display (Can be different from the package version)
+    /// </summary>
+    class function GetPackageDisplayVersion: string; static;
+    /// <summary>
+    ///   Returns the filename of the binary
+    /// </summary>
+    class function GetPackageFileName: string; static;
     /// <summary>
     ///   Returns id for the application package, if any exists
     /// </summary>
     class function GetPackageID: string; static;
     /// <summary>
-    ///   Returns version for the application package, if any exists
+    ///   Returns the name of the binary
+    /// </summary>
+    class function GetPackageName: string; static;
+    /// <summary>
+    ///   Returns the version for the application package, if any exists
     /// </summary>
     class function GetPackageVersion: string; static;
+    /// <summary>
+    ///   Returns UI mode for an Android device, or Undefined
+    /// </summary>
+    class function GetUIMode: TUIMode; static;
     /// <summary>
     ///   Returns the unique id for the device, if any exists
     /// </summary>
@@ -78,25 +108,39 @@ type
     /// </summary>
     class function IsBeta: Boolean; static;
     /// <summary>
+    ///   Returns whether the location service is enabled
+    /// </summary>
+    class function IsLocationServiceEnabled: Boolean; static;
+    /// <summary>
     ///   Returns whether the device is a mobile device
     /// </summary>
     class function IsMobile: Boolean; static;
-    /// <summary>
-    ///   Returns whether the screen is locked
-    /// </summary>
-    class function IsScreenLocked: Boolean; static;
-    /// <summary>
-    ///   Returns whether the device has touch capability
-    /// </summary>
-    class function IsTouchDevice: Boolean; static;
     /// <summary>
     ///   Returns whether the platform matches
     /// </summary>
     class function IsPlatform(const APlatform: TOSPlatform): Boolean; static;
     /// <summary>
+    ///   Returns whether the screen is locked
+    /// </summary>
+    class function IsScreenLocked: Boolean; static;
+    /// <summary>
+    ///   Returns whether the device is a tablet (e.g. large Android device or iPad)
+    /// </summary>
+    class function IsTablet: Boolean; static;
+    /// <summary>
+    ///   Returns whether the device has touch capability
+    /// </summary>
+    class function IsTouchDevice: Boolean; static;
+    /// <summary>
     ///   Opens the default browser with the URL
     /// </summary>
     class procedure OpenURL(const AURL: string); static;
+    class procedure OpenAppSettings; static;
+    class function OpenWriteSettingsPermissions: Boolean; static;
+    /// <summary>
+    ///   Prevent the screen from locking (Android and iOS)
+    /// </summary>
+    class procedure SetPreventScreenLock(const AValue: Boolean); static;
     /// <summary>
     ///   Shows the folder that contains the nominated files
     /// </summary>
@@ -126,14 +170,35 @@ uses
 
 { TOSDevice }
 
+class function TOSDevice.CanWriteSettings: Boolean;
+begin
+  {$IF Defined(ANDROID)}
+  Result := TOSDevice.CanWriteSettings;
+  {$ELSE}
+  Result := True;
+  {$ENDIF}
+end;
+
+
+class function TOSDevice.EnableTorch(const AEnable: Boolean): Boolean;
+begin
+  {$IF Defined(IOS) or Defined(ANDROID)}
+  Result := TPlatformOSDevice.EnableTorch(AEnable);
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
+end;
+
 class function TOSDevice.GetCurrentLocaleInfo: TLocaleInfo;
 begin
+  {$IF not Defined(LINUX64)}
   Result := TPlatformOSDevice.GetCurrentLocaleInfo;
+  {$ENDIF}
 end;
 
 class function TOSDevice.GetDeviceModel: string;
 begin
-  {$IF Defined(MACOS)}
+  {$IF Defined(MACOS) or Defined(ANDROID)}
   Result := TPlatformOSDevice.GetDeviceModel;
   {$ELSE}
   Result := '';
@@ -159,6 +224,17 @@ begin
   {$ENDIF}
 end;
 
+class function TOSDevice.GetManufacturer: string;
+begin
+  {$IF Defined(MACOS)}
+  Result := 'Apple'; // Do not localize
+  {$ELSEIF Defined(ANDROID)}
+  Result := TPlatformOSDevice.GetManufacturer;
+  {$ELSE}
+  Result := ''; // To do
+  {$ENDIF}
+end;
+
 class function TOSDevice.GetPackageBuild: string;
 begin
   {$IF Defined(MSWINDOWS)}
@@ -168,9 +244,28 @@ begin
   {$ENDIF}
 end;
 
+class function TOSDevice.GetPackageDisplayVersion: string;
+begin
+  {$IF not Defined(IOS)}
+  Result := TPlatformOSDevice.GetPackageVersion;
+  {$ELSE}
+  Result := TPlatformOSDevice.GetPackageDisplayVersion;
+  {$ENDIF}
+end;
+
+class function TOSDevice.GetPackageFileName: string;
+begin
+  Result := GetModuleName(HInstance);
+end;
+
 class function TOSDevice.GetPackageID: string;
 begin
   Result := TPlatformOSDevice.GetPackageID;
+end;
+
+class function TOSDevice.GetPackageName: string;
+begin
+  Result := TPlatformOSDevice.GetPackageName;
 end;
 
 class function TOSDevice.GetPackageVersion: string;
@@ -201,6 +296,15 @@ begin
   {$ENDIF}
 end;
 
+class function TOSDevice.IsLocationServiceEnabled: Boolean;
+begin
+  {$IF Defined(IOS) or Defined(ANDROID)}
+  Result := TPlatformOSDevice.IsLocationServiceEnabled;
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
+end;
+
 class function TOSDevice.IsMobile: Boolean;
 begin
   Result := TOSVersion.Platform in [TOSVersion.TPlatform.pfiOS, TOSVersion.TPlatform.pfAndroid];
@@ -220,15 +324,57 @@ begin
   {$ENDIF}
 end;
 
+class function TOSDevice.IsTablet: Boolean;
+begin
+  {$IF Defined(IOS) or Defined(ANDROID)}
+  Result := TPlatformOSDevice.IsTablet;
+  {$ELSE}
+  // TODO: Windows Surface devices, for example
+  Result := False;
+  {$ENDIF}
+end;
+
 class function TOSDevice.IsTouchDevice: Boolean;
 begin
   Result := TPlatformOSDevice.IsTouchDevice;
 end;
 
+class function TOSDevice.GetUIMode: TUIMode;
+begin
+  {$IF Defined(ANDROID)}
+  Result := TPlatformOSDevice.GetUIMode;
+  {$ELSE}
+  Result := TUIMode.Undefined;
+  {$ENDIF}
+end;
+
+class procedure TOSDevice.OpenAppSettings;
+begin
+  {$IF Defined(IOS) or Defined(ANDROID)}
+  TPlatformOSDevice.OpenAppSettings;
+  {$ENDIF}
+end;
+
 class procedure TOSDevice.OpenURL(const AURL: string);
 begin
-  {$IF Defined(IOS)}
+  {$IF Defined(MACOS) or Defined(ANDROID) or Defined(MSWINDOWS)}
   TPlatformOSDevice.OpenURL(AURL);
+  {$ENDIF}
+end;
+
+class function TOSDevice.OpenWriteSettingsPermissions: Boolean;
+begin
+  {$IF Defined(ANDROID)}
+  Result := TPlatformOSDevice.OpenWriteSettingsPermissions;
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
+end;
+
+class procedure TOSDevice.SetPreventScreenLock(const AValue: Boolean);
+begin
+  {$IF Defined(IOS) or Defined(ANDROID)}
+  TPlatformOSDevice.SetPreventScreenLock(AValue);
   {$ENDIF}
 end;
 

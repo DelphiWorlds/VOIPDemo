@@ -6,12 +6,10 @@ unit DW.PushKit;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 // Full instructions on VoIP setup: https://stackoverflow.com/a/28562124/3164070
 // Also: https://www.raywenderlich.com/8164-push-notifications-tutorial-getting-started
@@ -20,41 +18,44 @@ unit DW.PushKit;
 interface
 
 type
-  TPushKit = class;
-
-  TCustomPlatformPushKit = class(TObject)
-  private
-    FPushKit: TPushKit;
-  protected
-    procedure DoMessageReceived(const AJSON: string);
-    procedure DoTokenReceived(const AToken: string; const AIsNew: Boolean);
-    function GetStoredToken: string; virtual;
-    procedure Start; virtual;
-    property PushKit: TPushKit read FPushKit;
-  public
-    constructor Create(const APushKit: TPushKit); virtual;
-  end;
-
   TPushKitTokenReceivedEvent = procedure(Sender: TObject; const Token: string; const IsNew: Boolean) of object;
   TPushKitMessageReceivedEvent = procedure(Sender: TObject; const JSON: string) of object;
 
-  TPushKit = class(TObject)
+  IPushKit = interface(IInterface)
+    ['{EF909BEE-FBD1-4360-8424-643394E548C8}']
+    function GetStoredToken: string;
+    function GetOnMessageReceived: TPushKitMessageReceivedEvent;
+    function GetOnTokenReceived: TPushKitTokenReceivedEvent;
+    procedure SetOnMessageReceived(const Value: TPushKitMessageReceivedEvent);
+    procedure SetOnTokenReceived(const Value: TPushKitTokenReceivedEvent);
+    procedure Start;
+    property StoredToken: string read GetStoredToken;
+    property OnMessageReceived: TPushKitMessageReceivedEvent read GetOnMessageReceived write SetOnMessageReceived;
+    property OnTokenReceived: TPushKitTokenReceivedEvent read GetOnTokenReceived write SetOnTokenReceived;
+  end;
+
+  TCustomPlatformPushKit = class(TInterfacedObject, IPushKit)
   private
-    FPlatformPushKit: TCustomPlatformPushKit;
     FOnMessageReceived: TPushKitMessageReceivedEvent;
     FOnTokenReceived: TPushKitTokenReceivedEvent;
-    function GetStoredToken: string;
   protected
     procedure DoMessageReceived(const AJSON: string);
     procedure DoTokenReceived(const AToken: string; const AIsNew: Boolean);
   public
+    { IPushKit }
+    function GetStoredToken: string; virtual;
+    function GetOnMessageReceived: TPushKitMessageReceivedEvent;
+    function GetOnTokenReceived: TPushKitTokenReceivedEvent;
+    procedure SetOnMessageReceived(const Value: TPushKitMessageReceivedEvent);
+    procedure SetOnTokenReceived(const Value: TPushKitTokenReceivedEvent);
+    procedure Start; virtual;
+  public
     constructor Create;
     destructor Destroy; override;
-    procedure Start;
-    property StoredToken: string read GetStoredToken;
-    property OnMessageReceived: TPushKitMessageReceivedEvent read FOnMessageReceived write FOnMessageReceived;
-    property OnTokenReceived: TPushKitTokenReceivedEvent read FOnTokenReceived write FOnTokenReceived;
   end;
+
+var
+  PushKit: IPushKit;
 
 implementation
 
@@ -69,21 +70,39 @@ type
 
 { TCustomPlatformPushKit }
 
-constructor TCustomPlatformPushKit.Create(const APushKit: TPushKit);
+constructor TCustomPlatformPushKit.Create;
 begin
-  inherited Create;
-  FPushKit := APushKit;
+  inherited;
+  //
+end;
+
+destructor TCustomPlatformPushKit.Destroy;
+begin
+  //
+  inherited;
 end;
 
 procedure TCustomPlatformPushKit.DoMessageReceived(const AJSON: string);
 begin
-  TOSLog.d('TCustomPlatformPushKit.DoMessageReceived: %s', [AJSON]);
-  FPushKit.DoMessageReceived(AJSON);
+  TOSLog.d('TPushKit.DoMessageReceived: %s', [AJSON]);
+  if Assigned(FOnMessageReceived) then
+    FOnMessageReceived(Self, AJSON);
 end;
 
 procedure TCustomPlatformPushKit.DoTokenReceived(const AToken: string; const AIsNew: Boolean);
 begin
-  FPushKit.DoTokenReceived(AToken, AIsNew);
+  if Assigned(FOnTokenReceived) then
+    FOnTokenReceived(Self, AToken, AIsNew);
+end;
+
+function TCustomPlatformPushKit.GetOnMessageReceived: TPushKitMessageReceivedEvent;
+begin
+  Result := FOnMessageReceived;
+end;
+
+function TCustomPlatformPushKit.GetOnTokenReceived: TPushKitTokenReceivedEvent;
+begin
+  Result := FOnTokenReceived;
 end;
 
 function TCustomPlatformPushKit.GetStoredToken: string;
@@ -91,45 +110,22 @@ begin
   Result := '';
 end;
 
+procedure TCustomPlatformPushKit.SetOnMessageReceived(const Value: TPushKitMessageReceivedEvent);
+begin
+  FOnMessageReceived := Value;
+end;
+
+procedure TCustomPlatformPushKit.SetOnTokenReceived(const Value: TPushKitTokenReceivedEvent);
+begin
+  FOnTokenReceived := Value;
+end;
+
 procedure TCustomPlatformPushKit.Start;
 begin
   //
 end;
 
-{ TPushKit }
-
-constructor TPushKit.Create;
-begin
-  inherited;
-  FPlatformPushKit := TPlatformPushKit.Create(Self);
-end;
-
-destructor TPushKit.Destroy;
-begin
-  FPlatformPushKit.Free;
-  inherited;
-end;
-
-procedure TPushKit.DoMessageReceived(const AJSON: string);
-begin
-  if Assigned(FOnMessageReceived) then
-    FOnMessageReceived(Self, AJSON);
-end;
-
-procedure TPushKit.DoTokenReceived(const AToken: string; const AIsNew: Boolean);
-begin
-  if Assigned(FOnTokenReceived) then
-    FOnTokenReceived(Self, AToken, AIsNew);
-end;
-
-function TPushKit.GetStoredToken: string;
-begin
-  Result := FPlatformPushKit.GetStoredToken;
-end;
-
-procedure TPushKit.Start;
-begin
-  FPlatformPushKit.Start;
-end;
+initialization
+  PushKit := TPlatformPushKit.Create;
 
 end.

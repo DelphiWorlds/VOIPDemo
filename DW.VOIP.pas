@@ -6,12 +6,10 @@ unit DW.VOIP;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 interface
 
@@ -26,7 +24,9 @@ type
 
   TVOIPCallInfo = record
     DisplayName: string;
-    Ident: string;
+    Email: string;
+    PhoneNumber: string;
+    UUID: string;
   end;
 
   TVOIP = class;
@@ -34,27 +34,25 @@ type
   TCustomPlatformVOIP = class(TObject)
   private
     FIcon: TBitmap;
-    FPushKit: TPushKit;
     FVOIP: TVOIP;
     procedure PushKitMessageReceivedHandler(Sender: TObject; const AJSON: string);
     procedure PushKitTokenReceivedHandler(Sender: TObject; const AToken: string; const AIsNew: Boolean);
     procedure SetIcon(const Value: TBitmap);
   protected
-    procedure DoVOIPCallState(const ACallState: TVOIPCallState; const AIdent: string);
+    procedure DoVOIPCallStateChange(const ACallState: TVOIPCallState);
     procedure IconUpdated; virtual;
     procedure PushKitMessageReceived(const AJSON: string); virtual;
-    procedure ReportIncomingCall(const AIdent, ADisplayName: string); virtual;
+    procedure ReportIncomingCall(const AInfo: TVOIPCallInfo); virtual;
     procedure ReportOutgoingCall; virtual;
-    function StartCall(const AIdent, ADisplayName: string): Boolean; virtual;
+    function StartOutgoingCall(const AInfo: TVOIPCallInfo): Boolean; virtual;
     property Icon: TBitmap read FIcon write SetIcon;
-    property PushKit: TPushKit read FPushKit;
     property VOIP: TVOIP read FVOIP;
   public
     constructor Create(const AVOIP: TVOIP); virtual;
     destructor Destroy; override;
   end;
 
-  TVOIPCallStateEvent = procedure(Sender: TObject; const CallState: TVOIPCallState; const Ident: string) of object;
+  TVOIPCallStateChangeEvent = procedure(Sender: TObject; const CallState: TVOIPCallState) of object;
 
   TVOIP = class(TObject)
   private
@@ -62,24 +60,24 @@ type
     FPlatformVOIP: TCustomPlatformVOIP;
     FOnPushKitMessageReceived: TPushKitMessageReceivedEvent;
     FOnPushKitTokenReceived: TPushKitTokenReceivedEvent;
-    FOnVOIPCallState: TVOIPCallStateEvent;
+    FOnVOIPCallStateChange: TVOIPCallStateChangeEvent;
     function GetStoredToken: string;
     function GetIcon: TBitmap;
     procedure SetIcon(const Value: TBitmap);
   protected
-    procedure DoVOIPCallState(const ACallState: TVOIPCallState; const AIdent: string);
+    procedure DoVOIPCallStateChange(const ACallState: TVOIPCallState);
     function DoPushKitMessageReceived(const AJSON: string): Boolean;
     procedure DoPushKitTokenReceived(const AToken: string; const AIsNew: Boolean);
   public
     constructor Create;
     destructor Destroy; override;
     procedure Start;
-    procedure ReportIncomingCall(const AIdent, ADisplayName: string);
-    function StartCall(const AIdent, ADisplayName: string): Boolean;
+    procedure ReportIncomingCall(const AInfo: TVOIPCallInfo);
+    function StartOutgoingCall(const AInfo: TVOIPCallInfo): Boolean;
     property Icon: TBitmap read GetIcon write SetIcon;
     property IdentProperty: string read FIdentProperty write FIdentProperty;
     property StoredToken: string read GetStoredToken;
-    property OnVOIPCallState: TVOIPCallStateEvent read FOnVOIPCallState write FOnVOIPCallState;
+    property OnVOIPCallStateChange: TVOIPCallStateChangeEvent read FOnVOIPCallStateChange write FOnVOIPCallStateChange;
     property OnPushKitMessageReceived: TPushKitMessageReceivedEvent read FOnPushKitMessageReceived write FOnPushKitMessageReceived;
     property OnPushKitTokenReceived: TPushKitTokenReceivedEvent read FOnPushKitTokenReceived write FOnPushKitTokenReceived;
   end;
@@ -104,9 +102,8 @@ begin
   inherited Create;
   FIcon := TBitmap.Create;
   // PushKit handles the push notifications that signal an incoming call
-  FPushKit := TPushKit.Create;
-  FPushKit.OnTokenReceived := PushKitTokenReceivedHandler;
-  FPushKit.OnMessageReceived := PushKitMessageReceivedHandler;
+  PushKit.OnTokenReceived := PushKitTokenReceivedHandler;
+  PushKit.OnMessageReceived := PushKitMessageReceivedHandler;
   FVOIP := AVOIP;
 end;
 
@@ -116,9 +113,9 @@ begin
   inherited;
 end;
 
-procedure TCustomPlatformVOIP.DoVOIPCallState(const ACallState: TVOIPCallState; const AIdent: string);
+procedure TCustomPlatformVOIP.DoVOIPCallStateChange(const ACallState: TVOIPCallState);
 begin
-  FVOIP.DoVOIPCallState(ACallState, AIdent);
+  FVOIP.DoVOIPCallStateChange(ACallState);
 end;
 
 procedure TCustomPlatformVOIP.IconUpdated;
@@ -126,21 +123,25 @@ begin
   //
 end;
 
+
+// {"aps":{"alert":"VoIP Comming"},"callUUID":"db1dff98-bfef-4ec0-8ac6-8187a3b0c645","handle":"sherry@gmail.com"}
+
 procedure TCustomPlatformVOIP.PushKitMessageReceived(const AJSON: string);
 var
   LJSON: TJSONValue;
-  LIdent, LDisplayName: string;
+  LInfo: TVOIPCallInfo;
 begin
+  TOSLog.d('TCustomPlatformVOIP.PushKitMessageReceived');
   // By default, expect a property that identifies the incoming call
   LJSON := TJSONObject.ParseJSONValue(AJSON);
   if LJSON <> nil then
   try
-    if LJSON.TryGetValue(VOIP.IdentProperty, LIdent) then
-    begin
-      LDisplayName := 'Unknown'; // Needs localization
-      LJSON.TryGetValue('DisplayName', LDisplayName); // Might need a property too
-      ReportIncomingCall(LIdent, LDisplayName);
-    end;
+    LJSON.TryGetValue('uuid', LInfo.UUID);
+    LJSON.TryGetValue('phone', LInfo.PhoneNumber);
+    LJSON.TryGetValue('email', LInfo.Email);
+    LInfo.DisplayName := 'Unknown';
+    LJSON.TryGetValue('displayName', LInfo.DisplayName);
+    FVOIP.ReportIncomingCall(LInfo);
     //!!!! else perhaps have an "unhandled push" event
   finally
     LJSON.Free;
@@ -158,7 +159,7 @@ begin
   FVOIP.DoPushKitTokenReceived(AToken, AIsNew);
 end;
 
-procedure TCustomPlatformVOIP.ReportIncomingCall(const AIdent, ADisplayName: string);
+procedure TCustomPlatformVOIP.ReportIncomingCall(const AInfo: TVOIPCallInfo);
 begin
   //
 end;
@@ -174,7 +175,7 @@ begin
   IconUpdated;
 end;
 
-function TCustomPlatformVOIP.StartCall(const AIdent, ADisplayName: string): Boolean;
+function TCustomPlatformVOIP.StartOutgoingCall(const AInfo: TVOIPCallInfo): Boolean;
 begin
   Result := False;
 end;
@@ -194,10 +195,10 @@ begin
   inherited;
 end;
 
-procedure TVOIP.DoVOIPCallState(const ACallState: TVOIPCallState; const AIdent: string);
+procedure TVOIP.DoVOIPCallStateChange(const ACallState: TVOIPCallState);
 begin
-  if Assigned(FOnVOIPCallState) then
-    FOnVOIPCallState(Self, ACallState, AIdent);
+  if Assigned(FOnVOIPCallStateChange) then
+    FOnVOIPCallStateChange(Self, ACallState);
 end;
 
 function TVOIP.GetIcon: TBitmap;
@@ -207,7 +208,7 @@ end;
 
 function TVOIP.GetStoredToken: string;
 begin
-  Result := FPlatformVOIP.PushKit.StoredToken;
+  Result := PushKit.StoredToken;
 end;
 
 function TVOIP.DoPushKitMessageReceived(const AJSON: string): Boolean;
@@ -228,9 +229,9 @@ begin
     FOnPushKitTokenReceived(Self, AToken, AIsNew);
 end;
 
-procedure TVOIP.ReportIncomingCall(const AIdent, ADisplayName: string);
+procedure TVOIP.ReportIncomingCall(const AInfo: TVOIPCallInfo);
 begin
-  FPlatformVOIP.ReportIncomingCall(AIdent, ADisplayName);
+  FPlatformVOIP.ReportIncomingCall(AInfo);
 end;
 
 procedure TVOIP.SetIcon(const Value: TBitmap);
@@ -241,12 +242,12 @@ end;
 procedure TVOIP.Start;
 begin
   TOSLog.d('TVOIP.Start');
-  FPlatformVOIP.PushKit.Start;
+  PushKit.Start;
 end;
 
-function TVOIP.StartCall(const AIdent, ADisplayName: string): Boolean;
+function TVOIP.StartOutgoingCall(const AInfo: TVOIPCallInfo): Boolean;
 begin
-  Result := FPlatformVOIP.StartCall(AIdent, ADisplayName);
+  Result := FPlatformVOIP.StartOutgoingCall(AInfo);
 end;
 
 end.

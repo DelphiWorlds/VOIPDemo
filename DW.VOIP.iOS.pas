@@ -6,12 +6,10 @@ unit DW.VOIP.iOS;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 interface
 
@@ -31,30 +29,20 @@ type
     FVOIP: TPlatformVOIP;
   public
     { CXProviderDelegate }
-    [MethodName('provider:didActivateAudioSession:')]
-    procedure providerDidActivateAudioSession(provider: CXProvider; audioSession: AVAudioSession); cdecl;
+    procedure provider(provider: CXProvider; didActivateAudioSession: AVAudioSession); overload; cdecl;
+    function provider(provider: CXProvider; executeTransaction: CXTransaction): Boolean; overload; cdecl;
+    procedure provider(provider: CXProvider; performAnswerCallAction: CXAnswerCallAction); overload; cdecl;
+    procedure provider(provider: CXProvider; performEndCallAction: CXEndCallAction); overload; cdecl;
+    procedure provider(provider: CXProvider; performPlayDTMFCallAction: CXPlayDTMFCallAction); overload; cdecl;
+    procedure provider(provider: CXProvider; performSetGroupCallAction: CXSetGroupCallAction); overload; cdecl;
+    procedure provider(provider: CXProvider; performSetHeldCallAction: CXSetHeldCallAction); overload; cdecl;
+    procedure provider(provider: CXProvider; performSetMutedCallAction: CXSetMutedCallAction); overload; cdecl;
+    procedure provider(provider: CXProvider; performStartCallAction: CXStartCallAction); overload; cdecl;
+    procedure provider(provider: CXProvider; timedOutPerformingAction: CXAction); overload; cdecl;
     procedure providerDidBegin(provider: CXProvider); cdecl;
     [MethodName('provider:didDeactivateAudioSession:')]
-    procedure providerDidDeactivateAudioSession(provider: CXProvider; audioSession: AVAudioSession); cdecl;
+    procedure providerDidDeactivateAudioSession(provider: CXProvider; didDeactivateAudioSession: AVAudioSession); cdecl;
     procedure providerDidReset(provider: CXProvider); cdecl;
-    [MethodName('provider:executeTransaction:')]
-    function providerExecuteTransaction(provider: CXProvider; transaction: CXTransaction): Boolean; cdecl;
-    [MethodName('provider:performAnswerCallAction:')]
-    procedure providerPerformAnswerCallAction(provider: CXProvider; action: CXAnswerCallAction); cdecl;
-    [MethodName('provider:performEndCallAction:')]
-    procedure providerPerformEndCallAction(provider: CXProvider; action: CXEndCallAction); cdecl;
-    [MethodName('provider:performPlayDTMFCallAction:')]
-    procedure providerPerformPlayDTMFCallAction(provider: CXProvider; action: CXPlayDTMFCallAction); cdecl;
-    [MethodName('provider:performSetGroupCallAction:')]
-    procedure providerPerformSetGroupCallAction(provider: CXProvider; action: CXSetGroupCallAction); cdecl;
-    [MethodName('provider:performSetHeldCallAction:')]
-    procedure providerPerformSetHeldCallAction(provider: CXProvider; action: CXSetHeldCallAction); cdecl;
-    [MethodName('provider:performSetMutedCallAction:')]
-    procedure providerPerformSetMutedCallAction(provider: CXProvider; action: CXSetMutedCallAction); cdecl;
-    [MethodName('provider:performStartCallAction:')]
-    procedure providerPerformStartCallAction(provider: CXProvider; action: CXStartCallAction); cdecl;
-    [MethodName('provider:timedOutPerformingAction:')]
-    procedure providerTimedOutPerformingAction(provider: CXProvider; action: CXAction); cdecl;
   public
     constructor Create(const AVOIP: TPlatformVOIP);
   end;
@@ -66,19 +54,21 @@ type
     FIsCalling: Boolean;
     FProvider: CXProvider;
     FProviderDelegate: TCXProviderDelegate;
+    function GetVOIPHandle(const AInfo: TVOIPCallInfo): CXHandle;
     procedure IncomingCallCompletionHandler(error: NSError);
     procedure RequestStartCallTransactionCompletionHandler(error: NSError);
     procedure UpdateProvider;
   protected
     procedure IconUpdated; override;
-    procedure PerformAnswerCallAction(const action: CXAnswerCallAction);
-    procedure PerformEndCallAction(const action: CXEndCallAction);
-    procedure ReportIncomingCall(const AIdent, ADisplayName: string); override;
+    procedure PerformAnswerCallAction(const AAction: CXAnswerCallAction);
+    procedure PerformEndCallAction(const AAction: CXEndCallAction);
+    procedure PerformStartCallAction(const AAction: CXStartCallAction);
+    procedure ReportIncomingCall(const AInfo: TVOIPCallInfo); override;
     procedure ReportOutgoingCall; override;
-    procedure StartCall(const ADisplayName: string);
-    procedure VOIPCallState(const ACallState: TVOIPCallState; const AIdent: string);
+    function StartOutgoingCall(const AInfo: TVOIPCallInfo): Boolean; override;
+    procedure VOIPCallStateChange(const ACallState: TVOIPCallState);
   public
-    constructor Create(const AVOIP: TVOIP);
+    constructor Create(const AVOIP: TVOIP); override;
     destructor Destroy; override;
   end;
 
@@ -86,10 +76,27 @@ implementation
 
 uses
   DW.OSLog,
-  System.Classes,
+  System.Classes, System.SysUtils,
   Macapi.Helpers,
   iOSapi.UIKit,
   FMX.Helpers.iOS;
+
+const
+  libAVFAudio = '/System/Library/Frameworks/AVFAudio.framework/AVFAudio';
+
+type
+  AVAudioSessionClass = interface(NSObjectClass)
+    ['{F610D17D-E53E-4D85-976B-21D68784880A}']
+    {class} function sharedInstance: AVAudioSession; cdecl;
+  end;
+  TAVAudioSession = class(TOCGenericImport<AVAudioSessionClass, AVAudioSession>) end;
+
+  AVAudioSessionCategory = NSString;
+
+function AVAudioSessionCategoryPlayAndRecord: AVAudioSessionCategory;
+begin
+  Result := CocoaNSStringConst(libAVFAudio, 'AVAudioSessionCategoryPlayAndRecord');
+end;
 
 { TCXProviderDelegate }
 
@@ -99,7 +106,7 @@ begin
   FVOIP := AVOIP;
 end;
 
-procedure TCXProviderDelegate.providerDidActivateAudioSession(provider: CXProvider; audioSession: AVAudioSession);
+procedure TCXProviderDelegate.provider(provider: CXProvider; didActivateAudioSession: AVAudioSession);
 begin
   TOSLog.d('TCXProviderDelegate.providerDidActivateAudioSession');
 end;
@@ -109,7 +116,7 @@ begin
   TOSLog.d('TCXProviderDelegate.providerDidBegin');
 end;
 
-procedure TCXProviderDelegate.providerDidDeactivateAudioSession(provider: CXProvider; audioSession: AVAudioSession);
+procedure TCXProviderDelegate.providerDidDeactivateAudioSession(provider: CXProvider; didDeactivateAudioSession: AVAudioSession);
 begin
   TOSLog.d('TCXProviderDelegate.providerDidDeactivateAudioSession');
 end;
@@ -119,54 +126,56 @@ begin
   TOSLog.d('TCXProviderDelegate.providerDidReset');
 end;
 
-function TCXProviderDelegate.providerExecuteTransaction(provider: CXProvider; transaction: CXTransaction): Boolean;
+function TCXProviderDelegate.provider(provider: CXProvider; executeTransaction: CXTransaction): Boolean;
 begin
-  TOSLog.d('TCXProviderDelegate.providerExecuteTransaction');
-  Result := False;
+  // TOSLog.d('TCXProviderDelegate.providerExecuteTransaction');
+  Result := False; // Return True when customizing how transactions are handled
 end;
 
-procedure TCXProviderDelegate.providerPerformAnswerCallAction(provider: CXProvider; action: CXAnswerCallAction);
+procedure TCXProviderDelegate.provider(provider: CXProvider; performAnswerCallAction: CXAnswerCallAction);
 begin
   TOSLog.d('TCXProviderDelegate.providerPerformAnswerCallAction');
   // Called if the call is answered
-  FVOIP.PerformAnswerCallAction(action);
+  FVOIP.PerformAnswerCallAction(performAnswerCallAction);
 end;
 
-procedure TCXProviderDelegate.providerPerformEndCallAction(provider: CXProvider; action: CXEndCallAction);
+procedure TCXProviderDelegate.provider(provider: CXProvider; performEndCallAction: CXEndCallAction);
 begin
   TOSLog.d('TCXProviderDelegate.providerPerformEndCallAction');
   // Called if the call is ended or declined
-  FVOIP.PerformEndCallAction(action);
+  FVOIP.PerformEndCallAction(performEndCallAction);
 end;
 
-procedure TCXProviderDelegate.providerPerformPlayDTMFCallAction(provider: CXProvider; action: CXPlayDTMFCallAction);
+
+procedure TCXProviderDelegate.provider(provider: CXProvider; performSetHeldCallAction: CXSetHeldCallAction);
 begin
-  TOSLog.d('TCXProviderDelegate.providerPerformPlayDTMFCallAction');
+  TOSLog.d('TCXProviderDelegate.performSetHeldCallAction');
 end;
 
-procedure TCXProviderDelegate.providerPerformSetGroupCallAction(provider: CXProvider; action: CXSetGroupCallAction);
+procedure TCXProviderDelegate.provider(provider: CXProvider; performSetGroupCallAction: CXSetGroupCallAction);
 begin
-  TOSLog.d('TCXProviderDelegate.providerPerformSetGroupCallAction');
+  TOSLog.d('TCXProviderDelegate.performSetGroupCallAction');
 end;
 
-procedure TCXProviderDelegate.providerPerformSetHeldCallAction(provider: CXProvider; action: CXSetHeldCallAction);
+procedure TCXProviderDelegate.provider(provider: CXProvider; performPlayDTMFCallAction: CXPlayDTMFCallAction);
 begin
-  TOSLog.d('TCXProviderDelegate.providerPerformSetHeldCallAction');
+  TOSLog.d('TCXProviderDelegate.performPlayDTMFCallAction');
 end;
 
-procedure TCXProviderDelegate.providerPerformSetMutedCallAction(provider: CXProvider; action: CXSetMutedCallAction);
+procedure TCXProviderDelegate.provider(provider: CXProvider; timedOutPerformingAction: CXAction);
 begin
-  TOSLog.d('TCXProviderDelegate.providerPerformSetMutedCallAction');
+  TOSLog.d('TCXProviderDelegate.timedOutPerformingAction');
 end;
 
-procedure TCXProviderDelegate.providerPerformStartCallAction(provider: CXProvider; action: CXStartCallAction);
+procedure TCXProviderDelegate.provider(provider: CXProvider; performStartCallAction: CXStartCallAction);
 begin
-  TOSLog.d('TCXProviderDelegate.providerPerformStartCallAction');
+  TOSLog.d('TCXProviderDelegate.performStartCallAction');
+  FVOIP.PerformStartCallAction(performStartCallAction);
 end;
 
-procedure TCXProviderDelegate.providerTimedOutPerformingAction(provider: CXProvider; action: CXAction);
+procedure TCXProviderDelegate.provider(provider: CXProvider; performSetMutedCallAction: CXSetMutedCallAction);
 begin
-  TOSLog.d('TCXProviderDelegate.providerTimedOutPerformingAction');
+  TOSLog.d('TCXProviderDelegate.performSetMutedCallAction');
 end;
 
 { TPlatformVOIP }
@@ -202,8 +211,7 @@ begin
   // LConfiguration.setIncludeCallsInRecents(False); // Default True ? iOS 11 and above
   if FProvider = nil then
   begin
-    FProvider := TCXProvider.Create;
-    FProvider := TCXProvider.Wrap(FProvider.initWithConfiguration(LConfiguration));
+    FProvider := TCXProvider.Wrap(TCXProvider.Alloc.initWithConfiguration(LConfiguration));
     FProvider.setDelegate(FProviderDelegate.GetObjectID, 0);
   end
   else
@@ -215,68 +223,85 @@ begin
   UpdateProvider;
 end;
 
-procedure TPlatformVOIP.IncomingCallCompletionHandler(error: NSError);
-begin
-  TOSLog.d('TPlatformVOIP.IncomingCallCompletionHandler');
-  if error <> nil then
-  begin
-    TOSLog.d('> error is nil');
-    if FIncomingUUID <> nil then
-      VOIPCallState(TVOIPCallState.IncomingCall, NSStrToStr(FIncomingUUID.UUIDString));
-    //!!!!! else something is wrong
-  end
-  else
-    TOSLog.d('> error: %s', [NSStrToStr(error.localizedDescription)]);
-end;
-
-procedure TPlatformVOIP.PerformAnswerCallAction(const action: CXAnswerCallAction);
+procedure TPlatformVOIP.PerformAnswerCallAction(const AAction: CXAnswerCallAction);
 begin
   FIsCalling := False;
-  action.fulfill;
-  VOIPCallState(TVOIPCallState.CallAnswered, NSStrToStr(action.callUUID.UUIDString));
+  AAction.fulfill;
+  VOIPCallStateChange(TVOIPCallState.CallAnswered);
 end;
 
-procedure TPlatformVOIP.PerformEndCallAction(const action: CXEndCallAction);
+procedure TPlatformVOIP.PerformEndCallAction(const AAction: CXEndCallAction);
 var
   LState: TVOIPCallState;
 begin
-  action.fulfill;
+  AAction.fulfill;
   if FIsCalling then
     LState := TVOIPCallState.CallDeclined
   else
     LState := TVOIPCallState.CallDisconnected;
-  VOIPCallState(LState, NSStrToStr(action.callUUID.UUIDString));
+  VOIPCallStateChange(LState);
 end;
 
-procedure TPlatformVOIP.ReportIncomingCall(const AIdent, ADisplayName: string);
+procedure TPlatformVOIP.PerformStartCallAction(const AAction: CXStartCallAction);
+var
+  LAudioSession: AVAudioSession;
+  LPointer: Pointer;
+begin
+  LAudioSession := TAVAudioSession.OCClass.sharedInstance;
+  if LAudioSession.setCategory(AVAudioSessionCategoryPlayAndRecord, @LPointer) then
+  begin
+    TOSLog.d('TPlatformVOIP.PerformStartCallAction > AAction.fulfill');
+    AAction.fulfill;
+    VOIPCallStateChange(TVOIPCallState.OutgoingCall);
+  end
+  else
+    TOSLog.d('TPlatformVOIP.PerformStartCallAction > Could not start audio session');
+end;
+
+function TPlatformVOIP.GetVOIPHandle(const AInfo: TVOIPCallInfo): CXHandle;
+var
+  LPointer: Pointer;
+begin
+  if not AInfo.PhoneNumber.IsEmpty then
+    LPointer := TCXHandle.Alloc.initWithType(CXHandleTypePhoneNumber, StrToNSStr(AInfo.Email))
+  else if not AInfo.Email.IsEmpty then
+    LPointer := TCXHandle.Alloc.initWithType(CXHandleTypeEmailAddress, StrToNSStr(AInfo.Email))
+  else
+    LPointer := TCXHandle.Alloc.initWithType(CXHandleTypeGeneric, StrToNSStr(AInfo.DisplayName));
+  Result := TCXHandle.Wrap(LPointer);
+end;
+
+procedure TPlatformVOIP.ReportIncomingCall(const AInfo: TVOIPCallInfo);
 var
   LUpdate: CXCallUpdate;
   LHandle: CXHandle;
 begin
   TOSLog.d('+TPlatformVOIP.ReportIncomingCall');
-  if TThread.CurrentThread.ThreadID = MainThreadID then
-    TOSLog.d('> On main thread')
-  else
-    TOSLog.d('> Not on main thread');
   FIncomingUUID := nil;
+  // if not AInfo.UUID.IsEmpty then
+  //   FIncomingUUID := TNSUUID.Wrap(TNSUUID.Alloc.initWithUUIDString(StrToNSStr(AInfo.UUID))); // <---- This no worky?
+  // else
   FIncomingUUID := TNSUUID.Wrap(TNSUUID.OCClass.UUID);
-  LHandle := TCXHandle.Create;
-  LHandle := TCXHandle.Wrap(LHandle.initWithType(CXHandleTypeEmailAddress, StrToNSStr(AIdent)));
-  LUpdate := TCXCallUpdate.Create;
-  // LUpdate.setHasVideo(True); // for video
+  LHandle := GetVOIPHandle(AInfo);
+  LUpdate := TCXCallUpdate.Wrap(TCXCallUpdate.Alloc.init);
+  LUpdate.setLocalizedCallerName(StrToNSStr(AInfo.DisplayName));
+  LUpdate.setHasVideo(False);
+  LUpdate.setSupportsDTMF(True);
+  // LUpdate.setSupportsHolding(True); // <--- Set this if the user is on another call
+  LUpdate.setSupportsGrouping(False);
+  LUpdate.setSupportsUngrouping(False);
   LUpdate.setRemoteHandle(LHandle);
-  LUpdate.setLocalizedCallerName(StrToNSStr(ADisplayName));
-  TOSLog.d('> reportNewIncomingCallWithUUID: %s', [NSStrToStr(FIncomingUUID.UUIDString)]);
   FProvider.reportNewIncomingCallWithUUID(FIncomingUUID, LUpdate, IncomingCallCompletionHandler);
   TOSLog.d('-TPlatformVOIP.ReportIncomingCall');
 end;
 
-procedure TPlatformVOIP.RequestStartCallTransactionCompletionHandler(error: NSError);
+procedure TPlatformVOIP.IncomingCallCompletionHandler(error: NSError);
 begin
-  FIsCalling := error = nil;
+  // Even if a call is reported as incoming successfully, error here is non-nil, but causes a crash when accessing it
+  TOSLog.d('TPlatformVOIP.IncomingCallCompletionHandler');
 end;
 
-procedure TPlatformVOIP.StartCall(const ADisplayName: string);
+function TPlatformVOIP.StartOutgoingCall(const AInfo: TVOIPCallInfo): Boolean;
 var
   LHandle: CXHandle;
   LUUID: NSUUID;
@@ -284,18 +309,22 @@ var
   LAction: CXStartCallAction;
 begin
   LUUID := TNSUUID.Wrap(TNSUUID.OCClass.UUID);
-  LHandle := TCXHandle.Create;
-  LHandle := TCXHandle.Wrap(LHandle.initWithType(CXHandleTypeGeneric, StrToNSStr(ADisplayName)));
-  LAction := TCXStartCallAction.Create;
-  LAction := TCXStartCallAction.Wrap(LAction.initWithCallUUID(LUUID, LHandle));
-  LTransaction := TCXTransaction.Create;
-  LTransaction := TCXTransaction.Wrap(LTransaction.initWithAction(LAction));
+  LHandle := GetVOIPHandle(AInfo);
+  LAction := TCXStartCallAction.Wrap(TCXStartCallAction.Alloc.initWithCallUUID(LUUID, LHandle));
+  LTransaction := TCXTransaction.Wrap(TCXTransaction.Alloc.initWithAction(LAction));
   FController.requestTransaction(LTransaction, RequestStartCallTransactionCompletionHandler);
+  Result := True;
 end;
 
-procedure TPlatformVOIP.VOIPCallState(const ACallState: TVOIPCallState; const AIdent: string);
+procedure TPlatformVOIP.RequestStartCallTransactionCompletionHandler(error: NSError);
 begin
-  DoVOIPCallState(ACallState, AIdent);
+  FIsCalling := error = nil;
+end;
+
+procedure TPlatformVOIP.VOIPCallStateChange(const ACallState: TVOIPCallState);
+begin
+  TOSLog.d('+TPlatformVOIP.VOIPCallState');
+  DoVOIPCallStateChange(ACallState);
 end;
 
 procedure TPlatformVOIP.ReportOutgoingCall;

@@ -3,9 +3,7 @@ program VOIPDemo;
 uses
   System.StartUpCopy,
   FMX.Forms,
-  Unit1 in 'Unit1.pas' {Form1},
-  DW.VOIP.iOS in 'DW.VOIP.iOS.pas',
-  DW.VOIP in 'DW.VOIP.pas';
+  Unit1 in 'Unit1.pas' {Form1};
 
 {$R *.res}
 

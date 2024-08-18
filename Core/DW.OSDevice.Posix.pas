@@ -6,12 +6,10 @@ unit DW.OSDevice.Posix;
 {                                                       }
 {         Delphi Worlds Cross-Platform Library          }
 {                                                       }
-{  Copyright 2020-2021 Dave Nottage under MIT license   }
+{  Copyright 2020-2024 Dave Nottage under MIT license   }
 {  which is located in the root folder of this library  }
 {                                                       }
 {*******************************************************}
-
-{$I DW.GlobalDefines.inc}
 
 interface
 
@@ -44,7 +42,11 @@ begin
     LEnv := environ;
     while LEnv^ <> nil do
     begin
+      {$IF CompilerVersion > 33}
       LVar := string(PAnsiChar(LEnv^));
+      {$ELSE}
+      LVar := UTF8String(MarshaledAString(LEnv^));
+      {$ENDIF}
       AVars.Add(LVar);
       Inc(LEnv);
     end;
